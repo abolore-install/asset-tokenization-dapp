@@ -124,3 +124,25 @@
         )
     )
 )
+
+(define-public (mint-tokens (asset-id uint) (amount uint) (recipient principal))
+    (let ((asset (unwrap! (map-get? assets { asset-id: asset-id }) ERR_ASSET_NOT_FOUND)))
+        (if (and (is-eq (get owner asset) tx-sender) (not (get is-frozen asset)))
+            (let (
+                (current-balance (get-balance asset-id recipient))
+                (new-total-supply (+ (get total-supply asset) amount))
+            )
+                (map-set assets
+                    { asset-id: asset-id }
+                    (merge asset { total-supply: new-total-supply })
+                )
+                (map-set token-balances
+                    { asset-id: asset-id, owner: recipient }
+                    { balance: (+ current-balance amount) }
+                )
+                (ok true)
+            )
+            ERR_NOT_AUTHORIZED
+        )
+    )
+)
