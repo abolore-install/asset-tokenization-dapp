@@ -61,11 +61,9 @@
 )
 
 (define-private (asset-exists (asset-id uint))
-    (default-to false
-        (match (map-get? assets { asset-id: asset-id })
-            asset true
-            false
-        )
+    (match (map-get? assets { asset-id: asset-id })
+        asset true
+        false
     )
 )
 
