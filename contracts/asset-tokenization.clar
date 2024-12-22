@@ -210,3 +210,27 @@
         )
     )
 )
+
+;; Compliance Functions
+(define-public (set-compliance-authority (new-authority principal))
+    (if (is-contract-owner)
+        (begin
+            (var-set compliance-authority new-authority)
+            (ok true)
+        )
+        ERR_NOT_AUTHORIZED
+    )
+)
+
+(define-public (approve-user (asset-id uint) (user principal))
+    (if (is-eq tx-sender (var-get compliance-authority))
+        (begin
+            (map-set compliance-status
+                { asset-id: asset-id, user: user }
+                { approved: true, timestamp: block-height }
+            )
+            (ok true)
+        )
+        ERR_NOT_AUTHORIZED
+    )
+)
