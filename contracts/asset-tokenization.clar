@@ -97,3 +97,30 @@
         ERR_INSUFFICIENT_BALANCE
     ))
 )
+
+;; Public Functions
+(define-public (register-asset (asset-type (string-ascii 32)) (metadata-uri (string-utf8 256)) (initial-supply uint))
+    (let ((new-asset-id (+ (var-get total-assets) u1)))
+        (if (is-contract-owner)
+            (begin
+                (map-set assets
+                    { asset-id: new-asset-id }
+                    {
+                        owner: tx-sender,
+                        asset-type: asset-type,
+                        metadata-uri: metadata-uri,
+                        total-supply: initial-supply,
+                        is-frozen: false
+                    }
+                )
+                (map-set token-balances
+                    { asset-id: new-asset-id, owner: tx-sender }
+                    { balance: initial-supply }
+                )
+                (var-set total-assets new-asset-id)
+                (ok new-asset-id)
+            )
+            ERR_NOT_AUTHORIZED
+        )
+    )
+)
