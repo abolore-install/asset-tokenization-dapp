@@ -54,3 +54,25 @@
     { asset-id: uint, user: principal }
     { approved: bool, timestamp: uint }
 )
+
+;; Private Functions
+(define-private (is-contract-owner)
+    (is-eq tx-sender CONTRACT_OWNER)
+)
+
+(define-private (asset-exists (asset-id uint))
+    (default-to false
+        (match (map-get? assets { asset-id: asset-id })
+            asset true
+            false
+        )
+    )
+)
+
+(define-private (get-balance (asset-id uint) (user principal))
+    (default-to u0
+        (get balance
+            (map-get? token-balances { asset-id: asset-id, owner: user })
+        )
+    )
+)
