@@ -76,3 +76,24 @@
         )
     )
 )
+
+(define-private (transfer-tokens (asset-id uint) (from principal) (to principal) (amount uint))
+    (let (
+        (from-balance (get-balance asset-id from))
+        (to-balance (get-balance asset-id to))
+    )
+    (if (>= from-balance amount)
+        (begin
+            (map-set token-balances
+                { asset-id: asset-id, owner: from }
+                { balance: (- from-balance amount) }
+            )
+            (map-set token-balances
+                { asset-id: asset-id, owner: to }
+                { balance: (+ to-balance amount) }
+            )
+            (ok true)
+        )
+        ERR_INSUFFICIENT_BALANCE
+    ))
+)
