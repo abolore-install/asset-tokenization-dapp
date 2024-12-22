@@ -234,3 +234,23 @@
         ERR_NOT_AUTHORIZED
     )
 )
+
+;; Read-only Functions
+(define-read-only (get-asset-info (asset-id uint))
+    (map-get? assets { asset-id: asset-id })
+)
+
+(define-read-only (get-user-balance (asset-id uint) (user principal))
+    (get-balance asset-id user)
+)
+
+(define-read-only (get-listing (asset-id uint) (seller principal))
+    (map-get? marketplace-listings { asset-id: asset-id, seller: seller })
+)
+
+(define-read-only (is-user-approved (asset-id uint) (user principal))
+    (default-to
+        false
+        (get approved (map-get? compliance-status { asset-id: asset-id, user: user }))
+    )
+)
