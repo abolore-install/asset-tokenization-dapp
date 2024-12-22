@@ -181,3 +181,32 @@
         )
     )
 )
+
+(define-public (buy-asset (asset-id uint) (seller principal) (quantity uint))
+    (let (
+        (listing (unwrap! (map-get? marketplace-listings { asset-id: asset-id, seller: seller }) ERR_NOT_LISTED))
+        (total-cost (* (get price listing) quantity))
+    )
+        (if (and
+                (<= quantity (get quantity listing))
+                (>= (get expiry listing) block-height)
+            )
+            (begin
+                ;; Transfer STX payment
+                (unwrap! (stx-transfer? total-cost tx-sender seller) ERR_INSUFFICIENT_BALANCE)
+                ;; Transfer tokens
+                (unwrap! (transfer-tokens asset-id seller tx-sender quantity) ERR_INSUFFICIENT_BALANCE)
+                ;; Update listing
+                (if (is-eq quantity (get quantity listing))
+                    (map-delete marketplace-listings { asset-id: asset-id, seller: seller })
+                    (map-set marketplace-listings
+                        { asset-id: asset-id, seller: seller }
+                        (merge listing { quantity: (- (get quantity listing) quantity) })
+                    )
+                )
+                (ok true)
+            )
+            ERR_NOT_LISTED
+        )
+    )
+)
