@@ -146,3 +146,38 @@
         )
     )
 )
+
+(define-public (transfer (asset-id uint) (to principal) (amount uint))
+    (let ((asset (unwrap! (map-get? assets { asset-id: asset-id }) ERR_ASSET_NOT_FOUND)))
+        (if (not (get is-frozen asset))
+            (transfer-tokens asset-id tx-sender to amount)
+            ERR_NOT_AUTHORIZED
+        )
+    )
+)
+
+(define-public (list-asset (asset-id uint) (price uint) (quantity uint) (expiry uint))
+    (let (
+        (asset (unwrap! (map-get? assets { asset-id: asset-id }) ERR_ASSET_NOT_FOUND))
+        (seller-balance (get-balance asset-id tx-sender))
+    )
+        (if (and
+                (>= seller-balance quantity)
+                (> price u0)
+                (>= expiry block-height)
+            )
+            (begin
+                (map-set marketplace-listings
+                    { asset-id: asset-id, seller: tx-sender }
+                    {
+                        price: price,
+                        quantity: quantity,
+                        expiry: expiry
+                    }
+                )
+                (ok true)
+            )
+            ERR_INVALID_PRICE
+        )
+    )
+)
