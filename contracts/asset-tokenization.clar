@@ -137,10 +137,11 @@
 )
 
 (define-private (validate-recipient (recipient principal) (asset-id uint))
-    (ok (and 
-        (not (is-eq recipient (as-contract tx-sender)))
-        (is-some (map-get? assets { asset-id: asset-id }))
-    ))
+    (begin
+        (asserts! (not (is-eq recipient (as-contract tx-sender))) ERR_INVALID_RECIPIENT)
+        (asserts! (asset-exists asset-id) ERR_ASSET_NOT_FOUND)
+        (ok true)
+    )
 )
 
 (define-private (validate-marketplace-status (asset-id uint) (seller principal))
@@ -161,6 +162,12 @@
     ))
 )
 
+(define-private (validate-principal (user principal))
+    (ok (and
+        (not (is-eq user (as-contract tx-sender)))
+        (not (is-eq user CONTRACT_OWNER))
+    ))
+)
 
 ;; Public Functions
 (define-public (register-asset (asset-type (string-ascii 32)) (metadata-uri (string-utf8 256)) (initial-supply uint))
@@ -293,6 +300,7 @@
     (begin
         (asserts! (validate-asset-id asset-id) ERR_ASSET_NOT_FOUND)
         (asserts! (is-eq tx-sender (var-get compliance-authority)) ERR_NOT_AUTHORIZED)
+        (asserts! (unwrap! (validate-principal user) ERR_INVALID_PARAMS) ERR_INVALID_PARAMS)
         (map-set compliance-status
             { asset-id: asset-id, user: user }
             { approved: true, timestamp: block-height }
@@ -309,7 +317,11 @@
 )
 
 (define-read-only (get-user-balance (asset-id uint) (user principal))
-    (get-balance asset-id user)
+    (begin
+        (asserts! (validate-asset-id asset-id) ERR_ASSET_NOT_FOUND)
+        (asserts! (unwrap! (validate-principal user) ERR_INVALID_PARAMS) ERR_INVALID_PARAMS)
+        (ok (get-balance-or-zero asset-id user))
+    )
 )
 
 (define-read-only (get-listing (asset-id uint) (seller principal))
