@@ -21,6 +21,11 @@
 (define-constant ERR_INVALID_PARAMS (err u107))
 (define-constant ERR_INVALID_STRING (err u108))
 (define-constant ERR_INVALID_EXPIRY (err u109))
+(define-constant ERR_INVALID_RECIPIENT (err u110))
+(define-constant ERR_SELF_TRANSFER (err u111))
+(define-constant ERR_MARKETPLACE_FROZEN (err u112))
+(define-constant ERR_SELF_TRADE (err u113))
+(define-constant ERR_INVALID_AUTHORITY (err u114))
 
 ;; Data Variables
 (define-data-var total-assets uint u0)
@@ -131,6 +136,32 @@
     ))
 )
 
+(define-private (validate-recipient (recipient principal) (asset-id uint))
+    (ok (and 
+        (not (is-eq recipient (as-contract tx-sender)))
+        (is-some (map-get? assets { asset-id: asset-id }))
+    ))
+)
+
+(define-private (validate-marketplace-status (asset-id uint) (seller principal))
+    (ok (and 
+        (asset-exists asset-id)
+        (not (is-eq seller (as-contract tx-sender)))
+        (match (map-get? assets { asset-id: asset-id })
+            asset (not (get is-frozen asset))
+            false
+        )
+    ))
+)
+
+(define-private (validate-authority (new-authority principal) (current-authority principal))
+    (ok (and 
+        (not (is-eq new-authority (as-contract tx-sender)))
+        (not (is-eq new-authority current-authority))
+    ))
+)
+
+
 ;; Public Functions
 (define-public (register-asset (asset-type (string-ascii 32)) (metadata-uri (string-utf8 256)) (initial-supply uint))
     (let ((new-asset-id (+ (var-get total-assets) u1)))
@@ -162,6 +193,7 @@
     (let ((asset (unwrap! (map-get? assets { asset-id: asset-id }) ERR_ASSET_NOT_FOUND)))
         (asserts! (validate-asset-id asset-id) ERR_ASSET_NOT_FOUND)
         (asserts! (validate-amount amount) ERR_INVALID_PARAMS)
+        (asserts! (unwrap! (validate-recipient recipient asset-id) ERR_INVALID_RECIPIENT) ERR_INVALID_RECIPIENT)
         (asserts! (and (is-eq (get owner asset) tx-sender) (not (get is-frozen asset))) ERR_NOT_AUTHORIZED)
         (let (
             (current-balance (get-balance-or-zero asset-id recipient))
@@ -184,6 +216,8 @@
     (let ((asset (unwrap! (map-get? assets { asset-id: asset-id }) ERR_ASSET_NOT_FOUND)))
         (asserts! (validate-asset-id asset-id) ERR_ASSET_NOT_FOUND)
         (asserts! (validate-amount amount) ERR_INVALID_PARAMS)
+        (asserts! (unwrap! (validate-recipient to asset-id) ERR_INVALID_RECIPIENT) ERR_INVALID_RECIPIENT)
+        (asserts! (not (is-eq tx-sender to)) ERR_SELF_TRANSFER)
         (asserts! (not (get is-frozen asset)) ERR_NOT_AUTHORIZED)
         (transfer-tokens asset-id tx-sender to amount)
     )
@@ -216,18 +250,17 @@
 (define-public (buy-asset (asset-id uint) (seller principal) (quantity uint))
     (let (
         (listing (unwrap! (map-get? marketplace-listings { asset-id: asset-id, seller: seller }) ERR_NOT_LISTED))
-        (total-cost (* (get price listing) quantity))
     )
         (asserts! (validate-asset-id asset-id) ERR_ASSET_NOT_FOUND)
         (asserts! (validate-amount quantity) ERR_INVALID_PARAMS)
+        (asserts! (unwrap! (validate-marketplace-status asset-id seller) ERR_MARKETPLACE_FROZEN) ERR_MARKETPLACE_FROZEN)
+        (asserts! (not (is-eq tx-sender seller)) ERR_SELF_TRADE)
         (asserts! (<= quantity (get quantity listing)) ERR_INSUFFICIENT_BALANCE)
         (asserts! (validate-expiry (get expiry listing)) ERR_INVALID_EXPIRY)
-        (begin
-            ;; Transfer STX payment
-            (unwrap! (stx-transfer? total-cost tx-sender seller) ERR_INSUFFICIENT_BALANCE)
-            ;; Transfer tokens
-            (unwrap! (transfer-tokens asset-id seller tx-sender quantity) ERR_INSUFFICIENT_BALANCE)
-            ;; Update listing
+        
+        (let ((total-cost (* (get price listing) quantity)))
+            (try! (stx-transfer? total-cost tx-sender seller))
+            (try! (transfer-tokens asset-id seller tx-sender quantity))
             (if (is-eq quantity (get quantity listing))
                 (map-delete marketplace-listings { asset-id: asset-id, seller: seller })
                 (map-set marketplace-listings
@@ -244,6 +277,13 @@
 (define-public (set-compliance-authority (new-authority principal))
     (begin
         (asserts! (is-contract-owner) ERR_NOT_AUTHORIZED)
+        (asserts! 
+            (unwrap! 
+                (validate-authority new-authority (var-get compliance-authority)) 
+                ERR_INVALID_AUTHORITY
+            ) 
+            ERR_INVALID_AUTHORITY
+        )
         (var-set compliance-authority new-authority)
         (ok true)
     )
